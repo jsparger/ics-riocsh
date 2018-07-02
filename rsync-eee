@@ -1,0 +1,10 @@
+#!/bin/bash
+
+RSYNC_URL="rsync://owncloud01.esss.lu.se:80"
+[ -z "$1" ] || RSYNC_URL="$1"
+
+filter_rules="--exclude=.git/ --exclude=src/ --exclude=O.*/ --include=bin/centos** --exclude=bin/** --include=lib/centos** --exclude=lib/**"
+# rsync EPICS bases
+rsync -v --recursive --links --perms --times --timeout 120 ${filter_rules} ${RSYNC_URL}/epics/bases /opt/epics || exit 1
+# rsync EEE environment
+rsync -v --recursive --links --perms --times --timeout 120 ${filter_rules} ${RSYNC_URL}/epics/modules/environment /opt/epics/modules || exit 1
