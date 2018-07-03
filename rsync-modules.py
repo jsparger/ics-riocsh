@@ -70,19 +70,22 @@ class RSYNC(object):
                               '--include={epicsbase}/bin/{arch}** --exclude=*/bin/** ' \
                               '--include={epicsbase}/dbd/**       --exclude=*/dbd/** ' \
                               '--include={epicsbase}/include/**   --exclude=*/include/**'.format(arch = arch, epicsbase = epicsbase)
-        self._deprsync_opts = '--recursive --timeout 120 --perms --links --times --prune-empty-dirs -f"+ {epicsbase}/lib/{arch}" -f"- lib/*" -f"+ */" -f"+ /**.dep" -f"- *"'.format(arch = arch, epicsbase = epicsbase)
+        self._deprsync_opts = '-v --recursive --timeout 120 --perms --links --times --prune-empty-dirs --relative ' \
+                              '-f"+ {epicsbase}/lib/{arch}" -f"- lib/*" ' \
+                              '-f"+ */" -f"+ /**.dep" -f"- *"'.format(arch = arch, epicsbase = epicsbase)
 
-        if not os.path.isdir(prefix):
-            self.rsync_deps()
 
+    def rsync_deps(self, module = ""):
+        # rsync every dep file for all versions of a module. or all modules
+        if module == "":
+            logger = logging.getLogger(__name__)
+            logger.log(logger.getEffectiveLevel(), 'Updating dependency files (this might take a while)...')
 
-    def rsync_deps(self):
-        # rsync every dep file
-        logger = logging.getLogger(__name__)
-        logger.log(logger.getEffectiveLevel(), 'Updating dependency files (this might take a while)...')
-        if self._rsync('epics/modules', os.path.dirname(self._prefix), self._deprsync_opts):
+        if self._rsync(os.path.join('epics/modules', os.path.basename(module)), os.path.dirname(self._prefix), self._deprsync_opts):
             raise RuntimeError('Cannot update dependency files')
-        logger.log(logger.getEffectiveLevel(), 'Done')
+
+        if module == "":
+            logger.log(logger.getEffectiveLevel(), 'Done')
 
 
     def _rsync(self, src, dst, rsync_opts = None):
@@ -377,7 +380,7 @@ def module_version(module, comp_version='', epics_base_version='', target_arch='
     installed_versions = set()
     module_dir = os.path.join(args.prefix, module)
     if not os.path.isdir(module_dir):
-        rsync.rsync_deps()
+        rsync.rsync_deps(module_dir)
 
     if os.path.isdir(module_dir):
         for version in os.listdir(module_dir):
