@@ -132,6 +132,7 @@ class DependencyResolver(object):
         self._ud = []
         self._required_snippets = set()
         self._dependencies = set()
+        self._epicsenv = dict()
 
         for rs in req_snippets:
             rs = self.check_for_requireSnippet(rs)
@@ -160,19 +161,52 @@ class DependencyResolver(object):
                 self._ud.append((modver[0], modver[1]))
 
         while True:
-            self._ud = self.resolve_versions(self._ud)
-
-            while self._ud != []:
-                module = self._ud.pop()
-                self._dependencies |= recursive_solve(module, args)
-
-            self.rsync_modules()
+            self.resolve_module(self._ud)
 
             if len(self._required_snippets) == 0:
                 break
 
             self.parse_snippet(None, self.resolve_snippets())
 
+
+    def resolve_module(self, module):
+        if isinstance(module, tuple):
+            module = [ module ]
+
+        module = self.resolve_versions(module)
+
+        while module != []:
+            mod_ver = module.pop()
+            self._dependencies |= recursive_solve(mod_ver, args)
+
+        self.rsync_modules()
+
+
+    def strip_quote(self, quoted):
+        quoted = quoted.strip()
+        if quoted[0] in ['"', "'"]:
+            quoted = quoted.strip(quoted[0])
+
+        return quoted
+
+    def extract_macro_def(self, macro_defs):
+        macrostr = self.strip_quote(macro_defs.strip())
+
+        macros = dict()
+        for macro in macrostr.split(','):
+            (m, v) = macro.split('=')
+            macros[m.strip()] = v.strip()
+
+        return list(macros.iteritems())
+
+
+    def extract_epicsenv(self, epicsenv):
+        envtp = epicsenv.split('(')[1][:-1].split(',', 1)
+
+        m = self.strip_quote(envtp[0])
+        v = self.strip_quote(envtp[1])
+
+        return (m, v)
 
     def check_for_requireSnippet(self, cmd):
         """
@@ -196,13 +230,7 @@ class DependencyResolver(object):
             snippet = snippet[0]
             macros  = []
         else:
-            macrostr = snippet[1].strip()
-            if macrostr[0] in ['"', "'"]:
-                macrostr = macrostr.strip(macrostr[0])
-            macros = []
-            for macro in macrostr.split(','):
-                (m, v) = macro.split('=')
-                macros.append((m.strip(), v.strip()))
+            macros = self.extract_macro_def(snippet[1])
             snippet = snippet[0].strip().strip('"\'')
 
         logging.getLogger(__name__).debug('Found requireSnippet {}'.format(snippet))
@@ -230,9 +258,13 @@ class DependencyResolver(object):
         return resolved
 
 
-    def rsync_modules(self):
+    def rsync_modules(self, modules = None):
         logger = logging.getLogger(__name__)
-        for (modname, modversion) in self._dependencies:
+        if modules is None:
+            modules = self._dependencies
+        if isinstance(modules, tuple):
+            modules = [ modules ]
+        for (modname, modversion) in modules:
             rsync.rsync_module(modname, modversion)
 
 
@@ -263,11 +295,16 @@ class DependencyResolver(object):
                     if line.startswith('#') or line == '':
                         continue
 
+                    # handle epicsEnvSet(). it is heavily used by IOCFactory
+                    if line.startswith('epicsEnvSet'):
+                        (m, v) = self.extract_epicsenv(line)
+                        self._epicsenv[m] = v
+
                     # note the space after require! Needed to prevent matching requireSnippets
                     if line.startswith('require '):
                         (module, version) = line.split('require ')[1].split(',')
                         logger.debug('Found {},{}'.format(module, version))
-                        self._ud.append((module.strip(), version.strip()))
+                        self.resolve_module((module.strip(), version.strip()))
                         continue
 
                     rs = self.check_for_requireSnippet(line)
@@ -279,7 +316,7 @@ class DependencyResolver(object):
                         # IOCFactory does this
                         line = line[1:].strip().replace('/opt/epics/modules/', '')
                         logger.debug('Rsyncing ' + line)
-                        snippets.append(rsync.rsync_snippet(line))
+                        snippets.append((rsync.rsync_snippet(line), tuple(list(self._epicsenv.iteritems()))))
 
         while snippets != []:
             self.parse_snippet(snippets.pop(), snippets)
