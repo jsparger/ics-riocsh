@@ -288,7 +288,7 @@ class DependencyResolver(object):
                         continue
 
                     # find macro dereference:
-                    self._derefed_macros.update(self._macro_deref_pattern.findall())
+                    self._derefed_macros.update(self._macro_deref_pattern.findall(line))
 
                     # substitute macros
                     for macro in macros:
