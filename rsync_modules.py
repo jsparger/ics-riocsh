@@ -560,7 +560,7 @@ def main(pargs=None):
     rsync = RSYNC(args.prefix, args.epicsbase, args.targetarch)
     dpres = DependencyResolver(files, prefix = args.prefix, eb_version = args.epicsbase, ta = args.targetarch,
                                ud = args.user_dependency, req_snippets = commands)
-
+    return dpres
 
 
 
