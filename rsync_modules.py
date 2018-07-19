@@ -495,7 +495,7 @@ def recursive_solve(module, args, depth=10):
     return deps
 
 
-def main():
+def main(pargs=None):
     """Main function"""
     parser = argparse.ArgumentParser(description='Frontend to iocsh, rsyncs EEE modules')
 
@@ -529,7 +529,7 @@ def main():
 
 
     global args
-    args, extras = parser.parse_known_args()
+    args, extras = parser.parse_known_args() if not pargs else parser.parse_known_args(pargs)
 
     for extra in extras:
         if extra.startswith('-3.'):
