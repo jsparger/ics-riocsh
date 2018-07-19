@@ -133,6 +133,8 @@ class DependencyResolver(object):
         self._required_snippets = set()
         self._dependencies = set()
         self._epicsenv = dict()
+        self._derefed_macros = set()
+        self._macro_deref_pattern = re.compile("(?<=\$[{\(])([a-zA-Z]*)(?=[}\)])")
 
         for rs in req_snippets:
             rs = self.check_for_requireSnippet(rs)
@@ -270,7 +272,6 @@ class DependencyResolver(object):
 
     def parse_snippet(self, snippet, snippets = []):
         logger = logging.getLogger(__name__)
-
         if snippet is not None:
             subs = [ '${}', '$({})', '${{{}}}' ]
             if len(snippet) == 2:
@@ -278,12 +279,16 @@ class DependencyResolver(object):
                 snippet = snippet[0]
             else:
                 macros = []
+
             with open(snippet, 'r') as cmd:
                 for line in cmd:
 
                     line = line.strip()
                     if line == '' or line[0] == '#':
                         continue
+
+                    # find macro dereference:
+                    self._derefed_macros.update(self._macro_deref_pattern.findall())
 
                     # substitute macros
                     for macro in macros:
